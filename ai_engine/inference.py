@@ -12,7 +12,7 @@ try:
 except ImportError:
     HAS_ONNX = False
 
-from ai_engine.model import ATTACK_STAGES, NUM_STAGES, FEATURE_DIM, WINDOW_SIZE
+from ai_engine.config import ATTACK_STAGES, NUM_STAGES, FEATURE_DIM, WINDOW_SIZE
 
 ONNX_PATH = Path(__file__).parent / "models" / "attack_forecaster.onnx"
 PYTORCH_PATH = Path(__file__).parent / "models" / "attack_forecaster.pth"

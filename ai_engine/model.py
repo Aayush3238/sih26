@@ -1,28 +1,7 @@
 import torch
 import torch.nn as nn
-import math
 
-# MITRE ATT&CK Stages
-ATTACK_STAGES = [
-    "Reconnaissance",
-    "Resource Development",
-    "Initial Access",
-    "Execution",
-    "Persistence",
-    "Privilege Escalation",
-    "Defense Evasion",
-    "Credential Access",
-    "Discovery",
-    "Lateral Movement",
-    "Collection",
-    "Command and Control",
-    "Exfiltration",
-    "Impact",
-]
-
-NUM_STAGES = len(ATTACK_STAGES)
-FEATURE_DIM = 12  # Flow Duration, Total Packets, Fwd/Bwd Packets, Ports, etc.
-WINDOW_SIZE = 30  # Sliding window of 30 time steps
+from ai_engine.config import ATTACK_STAGES, NUM_STAGES, FEATURE_DIM, WINDOW_SIZE
 
 
 class AttackForecasterLSTM(nn.Module):
