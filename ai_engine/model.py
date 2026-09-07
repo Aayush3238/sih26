@@ -73,7 +73,7 @@ class AttackForecasterLSTM(nn.Module):
             nn.Linear(hidden_dim, num_classes),
         )
 
-        self.next_stage_head = nn.Sequential(
+        self.next_head = nn.Sequential(
             nn.Linear(hidden_dim, hidden_dim // 2),
             nn.ReLU(),
             nn.Dropout(dropout),
@@ -105,7 +105,7 @@ class AttackForecasterLSTM(nn.Module):
         last_hidden = attn_out[:, -1, :]  # (B, H)
 
         current_stage_logits = self.classifier(last_hidden)  # (B, NUM_STAGES)
-        next_stage_logits = self.next_stage_head(last_hidden)  # (B, NUM_STAGES)
+        next_stage_logits = self.next_head(last_hidden)  # (B, NUM_STAGES)
 
         return current_stage_logits, next_stage_logits
 
