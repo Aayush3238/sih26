@@ -27,7 +27,7 @@ export default function MitigationPanel({
     setEnforcing(true);
     setResult(null);
     try {
-      const backendHost = process.env.NEXT_PUBLIC_BACKEND_URL || `${window.location.hostname}:8000`;
+      const backendHost = "sih26-dqgv.onrender.com";
     const res = await fetch(
         `http://${backendHost}/api/mitigate`,
         {

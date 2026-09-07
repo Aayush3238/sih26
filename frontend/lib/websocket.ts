@@ -1,6 +1,4 @@
-const BACKEND_HOST = typeof window !== "undefined"
-  ? (process.env.NEXT_PUBLIC_BACKEND_URL || `${window.location.hostname}:8000`)
-  : "localhost:8000";
+const BACKEND_HOST = "sih26-dqgv.onrender.com";
 
 const WS_URL = typeof window !== "undefined"
   ? `ws://${BACKEND_HOST}/ws/telemetry`
