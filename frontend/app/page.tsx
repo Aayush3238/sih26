@@ -90,7 +90,8 @@ export default function Dashboard() {
     setProcessing(true);
     setActiveScenario(scenarioId);
     try {
-      const res = await fetch(`http://${window.location.hostname}:8000/api/telemetry`, {
+      const backendHost = process.env.NEXT_PUBLIC_BACKEND_URL || `${window.location.hostname}:8000`;
+      const res = await fetch(`http://${backendHost}/api/telemetry`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(features),

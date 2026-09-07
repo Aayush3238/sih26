@@ -1,5 +1,9 @@
+const BACKEND_HOST = typeof window !== "undefined"
+  ? (process.env.NEXT_PUBLIC_BACKEND_URL || `${window.location.hostname}:8000`)
+  : "localhost:8000";
+
 const WS_URL = typeof window !== "undefined"
-  ? `ws://${window.location.hostname}:8000/ws/telemetry`
+  ? `ws://${BACKEND_HOST}/ws/telemetry`
   : "";
 
 type PredictionData = {

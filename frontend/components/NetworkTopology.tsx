@@ -28,7 +28,7 @@ export default function NetworkTopology() {
   const [nodes, setNodes] = useState<Node[]>([]);
 
   useEffect(() => {
-    fetch(`http://${window.location.hostname}:8000/api/nodes`)
+    fetch(`http://${process.env.NEXT_PUBLIC_BACKEND_URL || window.location.hostname + ':8000'}/api/nodes`)
       .then((r) => r.json())
       .then(setNodes)
       .catch(console.error);

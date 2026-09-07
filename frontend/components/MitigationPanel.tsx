@@ -27,8 +27,9 @@ export default function MitigationPanel({
     setEnforcing(true);
     setResult(null);
     try {
-      const res = await fetch(
-        `http://${window.location.hostname}:8000/api/mitigate`,
+      const backendHost = process.env.NEXT_PUBLIC_BACKEND_URL || `${window.location.hostname}:8000`;
+    const res = await fetch(
+        `http://${backendHost}/api/mitigate`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

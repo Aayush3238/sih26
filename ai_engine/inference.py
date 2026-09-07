@@ -1,21 +1,25 @@
 import os
-import time
-import random
 import hashlib
+import random
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 
-import torch
+try:
+    import onnxruntime as ort
+    HAS_ONNX = True
+except ImportError:
+    HAS_ONNX = False
 
-from ai_engine.model import AttackForecasterLSTM, ATTACK_STAGES, NUM_STAGES, FEATURE_DIM, WINDOW_SIZE
+from ai_engine.model import ATTACK_STAGES, NUM_STAGES, FEATURE_DIM, WINDOW_SIZE
 
-MODEL_PATH = Path(__file__).parent / "models" / "attack_forecaster.pth"
+ONNX_PATH = Path(__file__).parent / "models" / "attack_forecaster.onnx"
+PYTORCH_PATH = Path(__file__).parent / "models" / "attack_forecaster.pth"
 
 
 class InferenceEngine:
-    """Unified inference interface: real model or deterministic mock fallback."""
+    """ONNX Runtime inference with deterministic mock fallback."""
 
     STAGE_RECOMMENDATIONS = {
         "Reconnaissance": "Monitor traffic patterns; enable IDS signature updates",
@@ -35,63 +39,105 @@ class InferenceEngine:
     }
 
     def __init__(self):
-        self.model: Optional[AttackForecasterLSTM] = None
-        self.device = torch.device("cpu")
+        self.session: Optional["ort.InferenceSession"] = None
         self.use_mock = True
-        self._mock_state = {"window": [], "stage_idx": 0, "tick": 0}
+        self._window: list[list[float]] = []
+        self._tick = 0
 
         self._try_load_model()
 
     def _try_load_model(self):
-        if MODEL_PATH.exists():
+        # Try ONNX first
+        if HAS_ONNX and ONNX_PATH.exists():
             try:
-                self.model = AttackForecasterLSTM()
-                state = torch.load(MODEL_PATH, map_location=self.device, weights_only=True)
-                self.model.load_state_dict(state)
-                self.model.to(self.device)
-                self.model.eval()
+                opts = ort.SessionOptions()
+                opts.inter_op_num_threads = 1
+                opts.intra_op_num_threads = 1
+                opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+                self.session = ort.InferenceSession(str(ONNX_PATH), opts, providers=["CPUExecutionProvider"])
                 self.use_mock = False
-                print(f"[InferenceEngine] Loaded trained model from {MODEL_PATH}")
+                print(f"[InferenceEngine] Loaded ONNX model from {ONNX_PATH} ({ONNX_PATH.stat().st_size / 1024:.0f} KB)")
+                return
             except Exception as e:
-                print(f"[InferenceEngine] Failed to load model: {e}. Using mock fallback.")
-                self.model = None
-                self.use_mock = True
-        else:
-            print(f"[InferenceEngine] No .pth file at {MODEL_PATH}. Using mock fallback.")
+                print(f"[InferenceEngine] ONNX load failed: {e}")
+
+        # Try PyTorch fallback
+        if not HAS_ONNX and PYTORCH_PATH.exists():
+            try:
+                import torch
+                from ai_engine.model import AttackForecasterLSTM
+                model = AttackForecasterLSTM()
+                state = torch.load(PYTORCH_PATH, map_location="cpu", weights_only=True)
+                model.load_state_dict(state)
+                model.eval()
+                self._torch_model = model
+                self.use_mock = False
+                print(f"[InferenceEngine] Loaded PyTorch model (ONNX Runtime not available)")
+                return
+            except Exception as e:
+                print(f"[InferenceEngine] PyTorch load failed: {e}")
+
+        print(f"[InferenceEngine] No model found. Using mock fallback.")
 
     def predict(self, features: list[float]) -> dict:
-        """
-        Accepts a single feature vector ( FEATURE_DIM floats ).
-        Internally manages a sliding window buffer.
-        Returns dict with current_stage, next_stage, confidence, mitigation.
-        """
         if len(features) < FEATURE_DIM:
             features = features + [0.0] * (FEATURE_DIM - len(features))
         elif len(features) > FEATURE_DIM:
             features = features[:FEATURE_DIM]
 
-        self._mock_state["window"].append(features)
-        if len(self._mock_state["window"]) > WINDOW_SIZE:
-            self._mock_state["window"] = self._mock_state["window"][-WINDOW_SIZE:]
+        self._window.append(features)
+        if len(self._window) > WINDOW_SIZE:
+            self._window = self._window[-WINDOW_SIZE:]
 
         if self.use_mock:
             return self._mock_predict(features)
+        elif self.session is not None:
+            return self._onnx_predict()
         else:
-            return self._model_predict()
+            return self._torch_predict()
 
-    def _model_predict(self) -> dict:
-        window = self._mock_state["window"]
+    def _onnx_predict(self) -> dict:
+        window = list(self._window)
         while len(window) < WINDOW_SIZE:
             window.insert(0, [0.0] * FEATURE_DIM)
 
         arr = np.array(window[-WINDOW_SIZE:], dtype=np.float32)
-        tensor = torch.tensor(arr, dtype=torch.float32).unsqueeze(0).to(self.device)
+        arr = arr[np.newaxis, :]  # (1, 30, 12)
+
+        cur_logits, nxt_logits = self.session.run(None, {"input": arr})
+
+        cur_probs = self._softmax(cur_logits[0])
+        nxt_probs = self._softmax(nxt_logits[0])
+
+        cur_idx = int(np.argmax(cur_probs))
+        nxt_idx = int(np.argmax(nxt_probs))
+        confidence = float(cur_probs[cur_idx]) * 100.0
+
+        return {
+            "current_stage": ATTACK_STAGES[cur_idx],
+            "next_stage": ATTACK_STAGES[nxt_idx],
+            "confidence": round(confidence, 2),
+            "current_stage_idx": cur_idx,
+            "next_stage_idx": nxt_idx,
+            "mitigation": self.STAGE_RECOMMENDATIONS.get(
+                ATTACK_STAGES[nxt_idx], "Review network traffic and isolate suspicious hosts"
+            ),
+        }
+
+    def _torch_predict(self) -> dict:
+        import torch
+        window = list(self._window)
+        while len(window) < WINDOW_SIZE:
+            window.insert(0, [0.0] * FEATURE_DIM)
+
+        arr = np.array(window[-WINDOW_SIZE:], dtype=np.float32)
+        tensor = torch.tensor(arr, dtype=torch.float32).unsqueeze(0)
 
         with torch.no_grad():
-            cur_logits, nxt_logits = self.model(tensor)
+            cur_logits, nxt_logits = self._torch_model(tensor)
 
-        cur_probs = torch.softmax(cur_logits, dim=-1).squeeze(0).cpu().numpy()
-        nxt_probs = torch.softmax(nxt_logits, dim=-1).squeeze(0).cpu().numpy()
+        cur_probs = self._softmax(cur_logits.squeeze(0).numpy())
+        nxt_probs = self._softmax(nxt_logits.squeeze(0).numpy())
 
         cur_idx = int(np.argmax(cur_probs))
         nxt_idx = int(np.argmax(nxt_probs))
@@ -109,8 +155,8 @@ class InferenceEngine:
         }
 
     def _mock_predict(self, features: list[float]) -> dict:
-        self._mock_state["tick"] += 1
-        tick = self._mock_state["tick"]
+        self._tick += 1
+        tick = self._tick
 
         seed_val = sum(features[:6]) + tick * 0.1
         h = int(hashlib.md5(str(seed_val).encode()).hexdigest()[:8], 16)
@@ -135,6 +181,11 @@ class InferenceEngine:
                 ATTACK_STAGES[nxt_idx], "Review network traffic and isolate suspicious hosts"
             ),
         }
+
+    @staticmethod
+    def _softmax(x):
+        e = np.exp(x - np.max(x))
+        return e / e.sum()
 
 
 _engine: Optional[InferenceEngine] = None

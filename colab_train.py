@@ -388,13 +388,35 @@ def train():
         )
 
     print(f"\nTraining complete. Best model saved to {OUTPUT_PATH}")
-    print(f"Copy {OUTPUT_PATH} to ai_engine/models/ in your project directory.")
 
     model.load_state_dict(torch.load(OUTPUT_PATH, map_location=DEVICE, weights_only=True))
     model.eval()
     dummy = torch.randn(1, WINDOW_SIZE, FEATURE_DIM).to(DEVICE)
     cur, nxt = model(dummy)
     print(f"Model sanity check: current={cur.shape}, next={nxt.shape}")
+
+    # Export to ONNX for lightweight CPU inference
+    onnx_path = "attack_forecaster.onnx"
+    print(f"\nExporting to ONNX format -> {onnx_path}")
+    torch.onnx.export(
+        model,
+        dummy,
+        onnx_path,
+        input_names=["input"],
+        output_names=["current_stage", "next_stage"],
+        dynamic_axes={
+            "input": {0: "batch_size"},
+            "current_stage": {0: "batch_size"},
+            "next_stage": {0: "batch_size"},
+        },
+        opset_version=17,
+    )
+    import os
+    onnx_size = os.path.getsize(onnx_path) / (1024 * 1024)
+    print(f"ONNX model saved: {onnx_size:.2f} MB")
+    print(f"\nFiles to copy to ai_engine/models/:")
+    print(f"  - {OUTPUT_PATH} (PyTorch weights)")
+    print(f"  - {onnx_path} (ONNX for deployment)")
 
 
 if __name__ == "__main__":
