@@ -27,9 +27,8 @@ export default function MitigationPanel({
     setEnforcing(true);
     setResult(null);
     try {
-      const backendHost = "sih26-dqgv.onrender.com";
     const res = await fetch(
-        `http://${backendHost}/api/mitigate`,
+        `http://localhost:8000/api/mitigate`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },

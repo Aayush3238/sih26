@@ -6,6 +6,7 @@ import KillChainTimeline from "../components/KillChainTimeline";
 import NetworkTopology from "../components/NetworkTopology";
 import MitigationPanel from "../components/MitigationPanel";
 import DemoControls from "../components/DemoControls";
+import PredictionPopup from "../components/PredictionPopup";
 import { connectWebSocket } from "../lib/websocket";
 
 interface PredictionData {
@@ -48,6 +49,14 @@ export default function Dashboard() {
   const [processing, setProcessing] = useState(false);
   const [activeScenario, setActiveScenario] = useState("");
   const [currentStepDesc, setCurrentStepDesc] = useState("");
+  const [showPopup, setShowPopup] = useState(false);
+  const [popupData, setPopupData] = useState({
+    currentStage: "",
+    nextStage: "",
+    confidence: 0,
+    mitigation: "",
+    srcIp: "",
+  });
   const logIdRef = useRef(0);
 
   const handleMessage = useCallback((msg: PredictionData) => {
@@ -68,6 +77,15 @@ export default function Dashboard() {
     setAttackerIp(d.src_ip);
     setTick((t) => t + 1);
     if (stepDesc) setCurrentStepDesc(stepDesc);
+
+    setPopupData({
+      currentStage: d.current_stage,
+      nextStage: d.next_stage,
+      confidence: d.confidence,
+      mitigation: d.mitigation,
+      srcIp: d.src_ip,
+    });
+    setShowPopup(true);
 
     logIdRef.current += 1;
     setThreatLogs((prev) => {
@@ -90,8 +108,7 @@ export default function Dashboard() {
     setProcessing(true);
     setActiveScenario(scenarioId);
     try {
-      const backendHost = "sih26-dqgv.onrender.com";
-      const res = await fetch(`http://${backendHost}/api/telemetry`, {
+      const res = await fetch(`http://localhost:8000/api/telemetry`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(features),
@@ -122,6 +139,15 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-white">
+      <PredictionPopup
+        currentStage={popupData.currentStage}
+        nextStage={popupData.nextStage}
+        confidence={popupData.confidence}
+        mitigation={popupData.mitigation}
+        srcIp={popupData.srcIp}
+        visible={showPopup}
+        onDismiss={() => setShowPopup(false)}
+      />
       <header className="border-b border-white/[0.06] bg-[#0a0a0f]/80 backdrop-blur-xl sticky top-0 z-50">
         <div className="max-w-[1600px] mx-auto px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">

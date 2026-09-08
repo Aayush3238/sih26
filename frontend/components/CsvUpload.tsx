@@ -46,8 +46,7 @@ export default function CsvUpload({ onPrediction }: CsvUploadProps) {
     formData.append("file", file);
 
     try {
-      const backendHost = "sih26-dqgv.onrender.com";
-      const res = await fetch(`http://${backendHost}/api/upload-csv`, {
+      const res = await fetch(`http://localhost:8000/api/upload-csv`, {
         method: "POST",
         body: formData,
       });

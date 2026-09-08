@@ -1,4 +1,4 @@
-const BACKEND_HOST = "sih26-dqgv.onrender.com";
+const BACKEND_HOST = "localhost:8000";
 
 const WS_URL = typeof window !== "undefined"
   ? `ws://${BACKEND_HOST}/ws/telemetry`

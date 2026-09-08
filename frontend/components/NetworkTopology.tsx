@@ -28,7 +28,7 @@ export default function NetworkTopology() {
   const [nodes, setNodes] = useState<Node[]>([]);
 
   useEffect(() => {
-    fetch(`https://sih26-dqgv.onrender.com/api/nodes`)
+    fetch(`http://localhost:8000/api/nodes`)
       .then((r) => r.json())
       .then(setNodes)
       .catch(console.error);
